@@ -109,24 +109,57 @@ uv run --no-project ruff format --check .
 
 ### 3. 安装到 Gateway
 
-从 DeerFlow 仓库根执行（本地目录必须用**绝对路径**，因为 `make` 包装器从 `backend/` 运行）：
+`SOURCE` 支持三种来源：**本地目录**、**PyPI 包名/版本**、**公网 HTTPS Git**。
+
+#### 3.1 本地目录（开发常用）
+
+从 DeerFlow 仓库根执行（本地目录用**绝对路径**，因为 `make` 包装器从 `backend/` 运行）：
 
 ```bash
 make extension-install SOURCE="$PWD/examples/deerflow-quota-extension"
 make extension-list
 ```
 
-等价的手工 CLI（从 `backend/` 执行）——`--yes` 表示已审阅并信任该来源（扩展代码与构建钩子
-以 Gateway 权限运行），`--required` 会把加载失败升级为启动中止：
+#### 3.2 PyPI 包
 
 ```bash
-uv run --frozen --no-group extensions deerflow extensions install <source> [--yes] [--required]
+make extension-install SOURCE=deerflow-quota-extension
+make extension-install SOURCE=deerflow-quota-extension==0.1.0
+make extension-install SOURCE="deerflow-quota-extension>=0.1,<0.2"
 ```
 
-管理器会：
+#### 3.3 公网 HTTPS Git
+
+```bash
+make extension-install SOURCE=git+https://github.com/<org>/<repo>.git
+make extension-install SOURCE=git+https://github.com/<org>/<repo>.git@v0.1.0   # 建议固定 tag/commit
+```
+
+也接受 PEP 508 命名直引：
+
+```bash
+make extension-install SOURCE="deerflow-quota-extension @ git+https://github.com/<org>/<repo>.git@v0.1.0"
+```
+
+#### 3.4 直连 CLI（等价）
+
+从 `backend/` 执行；`--yes` 表示已审阅并信任该来源（扩展代码与构建钩子以 Gateway 权限运行），
+`--required` 会把加载失败升级为启动中止：
+
+```bash
+uv run --frozen --no-group extensions deerflow extensions install "<source>" [--yes] [--required]
+```
+
+#### 来源约束
+
+- 只接受 **HTTPS**；`http` 仅允许 `localhost` / `127.0.0.1` / `::1`；
+- 拒绝 `file://`、`ssh://`、`git@host:org/repo.git` 简写，以及含内嵌凭据的 URL；
+- 包必须暴露**恰好一个** `deerflow.extensions` 入口点。
+
+#### 管理器会做什么
 
 1. 先校验目标 `config.yaml` 可写（`uv add/sync` 会执行包的 build backend）；
-2. 把本地目录**快照**（拷贝，非 editable 链接）到 `backend/extensions/sources/<distribution>/`；
+2. **本地目录**：快照（拷贝，非 editable 链接）到 `backend/extensions/sources/<distribution>/`，并以该快照作为依赖路径；**PyPI / Git**：不生成快照，作为远程依赖交给 uv，由 `uv sync` 拉取；
 3. 把该包写入 `backend/pyproject.toml` 的 `[dependency-groups].extensions` 并更新 `backend/uv.lock`；
 4. `uv sync --locked --all-packages` 安装到环境；
 5. 写入/采纳 `config.yaml` 的 `plugins:` 记录（`name` / `package` / `use` / `enabled` / `required` / `config`）。
