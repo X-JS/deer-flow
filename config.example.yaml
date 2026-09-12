@@ -489,6 +489,42 @@ models:
   #     extra_body:
   #       reasoning_format: deepseek-style
 
+  # Example: OpenCode Go (Zen) — OpenAI-compatible coding-model subscription
+  # Docs: https://opencode.ai/docs/go/
+  # Model ids are the bare API ids (e.g. deepseek-v4-flash); the
+  # "opencode-go/<id>" form is only for opencode's own config and is rejected
+  # by this endpoint (401 ModelError). OpenCode Go also requires a
+  # client-identifying User-Agent and a x-opencode-session header; a request
+  # without the session header fails with 400 MissingSessionID.
+  # OpenCodeChatModel sends "deer-flow:<thread_id>" per request so each
+  # conversation gets a stable session (good for routing / prompt caching);
+  # default_headers["x-opencode-session"] is the fallback for calls with no
+  # thread context (title generation, memory extraction). Models served on the
+  # Anthropic /messages endpoint (minimax-*, qwen3.*) need a separate
+  # ChatAnthropic entry and are not shown here.
+  # - name: deepseek-v4-flash
+  #   display_name: OpenCode Go / deepseek-v4-flash
+  #   use: deerflow.models.opencode_provider:OpenCodeChatModel
+  #   model: deepseek-v4-flash
+  #   api_key: $OPENCODE_API_KEY
+  #   base_url: https://opencode.ai/zen/go/v1
+  #   request_timeout: 600.0
+  #   max_retries: 2
+  #   max_tokens: 8192
+  #   supports_vision: false
+  #   supports_thinking: true
+  #   default_headers:
+  #     User-Agent: deer-flow/1.0
+  #     x-opencode-session: deer-flow
+  #   when_thinking_enabled:
+  #     extra_body:
+  #       thinking:
+  #         type: enabled
+  #   when_thinking_disabled:
+  #     extra_body:
+  #       thinking:
+  #         type: disabled
+
   # Example: MiniMax (OpenAI-compatible) - International Edition
   # MiniMax provides high-performance models with 512K context window and 128K max output
   # Docs: https://platform.minimax.io/docs/api-reference/text-openai-api

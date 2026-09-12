@@ -867,6 +867,9 @@ dev = [
     { name = "ruff" },
     { name = "textual" },
 ]
+extensions = [
+    { name = "deerflow-quota-extension" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -914,7 +917,7 @@ dev = [
     { name = "ruff", specifier = ">=0.14.11" },
     { name = "textual", specifier = ">=0.80" },
 ]
-extensions = []
+extensions = [{ name = "deerflow-quota-extension", directory = "extensions/sources/deerflow-quota-extension" }]
 
 [[package]]
 name = "deerflow-extension-api"
@@ -1066,6 +1069,27 @@ requires-dist = [
     { name = "tzdata", specifier = ">=2025.1" },
 ]
 provides-extras = ["tui", "groundroute", "ollama", "postgres", "redis", "pymupdf", "boxlite", "tenki", "opensandbox", "monocle", "browser", "memory-zh"]
+
+[[package]]
+name = "deerflow-quota-extension"
+version = "0.1.0"
+source = { directory = "extensions/sources/deerflow-quota-extension" }
+dependencies = [
+    { name = "deerflow-extension-api" },
+    { name = "fastapi" },
+    { name = "langchain" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "deerflow-extension-api", specifier = ">=0.2,<0.3" },
+    { name = "fastapi", specifier = ">=0.115.0,<1" },
+    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.28,<1" },
+    { name = "langchain", specifier = ">=1.3,<2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9,<10" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14,<1" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "defusedxml"

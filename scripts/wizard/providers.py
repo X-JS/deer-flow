@@ -476,6 +476,59 @@ LLM_PROVIDERS: list[LLMProvider] = [
         },
     ),
     LLMProvider(
+        name="opencode_go",
+        display_name="OpenCode Go (Zen)",
+        description="Low-cost Zen Go subscription; OpenAI-compatible model catalog",
+        # Sends a per-thread x-opencode-session header (required by the Zen Go
+        # endpoint); falls back to default_headers["x-opencode-session"] outside
+        # a thread run.
+        use="deerflow.models.opencode_provider:OpenCodeChatModel",
+        # Only the /chat/completions family is reachable through
+        # langchain_openai:ChatOpenAI. OpenCode Go serves minimax-* and qwen3.*
+        # on the Anthropic /messages endpoint, which needs a separate provider.
+        # Model ids are the bare API ids: "opencode-go/<id>" is opencode's own
+        # config format and is rejected by this endpoint (401 ModelError).
+        models=[
+            "deepseek-v4-flash",
+            "deepseek-v4.1-flash",
+            "deepseek-v4-pro",
+            "deepseek-v4-flash-vision-exp",
+            "glm-5.3-flash",
+            "glm-5.3",
+            "glm-5.2",
+            "glm-5.1",
+            "kimi-k3",
+            "kimi-k2.7-code",
+            "kimi-k2.6",
+            "longcat-2.0",
+            "mimo-v2.5",
+            "mimo-v2.5-pro",
+            "hy3",
+        ],
+        default_model="deepseek-v4-flash",
+        env_var="OPENCODE_API_KEY",
+        package="langchain-openai",
+        extra_config={
+            "base_url": "https://opencode.ai/zen/go/v1",
+            "request_timeout": 600.0,
+            "max_retries": 2,
+            "max_tokens": 8192,
+            "supports_vision": False,
+            # OpenCode Go routes by session and rejects requests that omit
+            # x-opencode-session (400 MissingSessionID); it also expects a
+            # client-identifying User-Agent. DeerFlow cannot vary this per
+            # conversation, so one stable value is used.
+            "default_headers": {
+                "User-Agent": "deer-flow/1.0",
+                "x-opencode-session": "deer-flow",
+            },
+            **OPENAI_COMPAT_THINKING_CONFIG,
+        },
+        model_vision_overrides={
+            "deepseek-v4-flash-vision-exp": True,
+        },
+    ),
+    LLMProvider(
         name="orcarouter",
         display_name="OrcaRouter",
         description="OpenAI-compatible adaptive routing gateway",

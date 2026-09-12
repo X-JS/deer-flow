@@ -58,7 +58,6 @@ tests/
 # Backend build only needs backend/
 scripts/
 logs/
-docker/
 skills/
 frontend/.next
 frontend/node_modules
@@ -84,3 +83,8 @@ backend/sandbox/
 !backend/extensions/
 !backend/extensions/sources/
 !backend/extensions/sources/**
+
+graphify-out/
+history/
+.playwright-mcp/
+.extensions_config.json.lock

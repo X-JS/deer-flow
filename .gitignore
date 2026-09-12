@@ -69,3 +69,9 @@ config.yaml.bak
 
 # Monocle agent-observability trace output (local file exporter)
 .monocle/
+
+graphify-out/
+.extensions_config.json.lock
+
+# Local change-history notes (not committed)
+history/

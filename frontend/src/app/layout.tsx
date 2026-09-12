@@ -19,7 +19,7 @@ export default function RootLayout({
       suppressContentEditableWarning
       suppressHydrationWarning
     >
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider attribute="class" enableSystem disableTransitionOnChange>
           {children}
         </ThemeProvider>

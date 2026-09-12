@@ -168,6 +168,16 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
        api_key: $OPENROUTER_API_KEY
        base_url: https://openrouter.ai/api/v1
 
+     - name: opencode-go-deepseek-v4-flash
+       display_name: DeepSeek V4 Flash (OpenCode Go)
+       use: deerflow.models.opencode_provider:OpenCodeChatModel
+       model: deepseek-v4-flash
+       api_key: $OPENCODE_API_KEY
+       base_url: https://opencode.ai/zen/go/v1
+       default_headers:
+         User-Agent: deer-flow/1.0
+         x-opencode-session: deer-flow
+
      - name: gpt-5-responses
        display_name: GPT-5 (Responses API)
        use: langchain_openai:ChatOpenAI
@@ -190,6 +200,8 @@ That prompt is intended for coding agents. It tells the agent to clone the repo 
    ```
 
    OpenRouter and similar OpenAI-compatible gateways should be configured with `langchain_openai:ChatOpenAI` plus `base_url`. If you prefer a provider-specific environment variable name, point `api_key` at that variable explicitly (for example `api_key: $OPENROUTER_API_KEY`).
+
+   OpenCode Go (Zen) requires a client-identifying `User-Agent` and an `x-opencode-session` header; a request without the session header fails with `400 MissingSessionID`. Use the **bare** API model id (`deepseek-v4-flash`) — the `opencode-go/<id>` form is opencode's own config format and is rejected by this endpoint with `401 ModelError`. Configure this profile with `deerflow.models.opencode_provider:OpenCodeChatModel`, which sends `deer-flow:<thread_id>` per request so each conversation gets a stable session (good for routing and prompt caching); `default_headers.x-opencode-session` is the fallback for calls with no thread context (title generation, memory extraction). opencode monitors traffic for abuse and DeerFlow is not one of its validated clients. Models served on the Anthropic `/messages` endpoint (`minimax-*`, `qwen3.*`) need a separate `langchain_anthropic:ChatAnthropic` entry. The setup wizard also offers this profile as **OpenCode Go (Zen)**.
 
    To route OpenAI models through `/v1/responses`, keep using `langchain_openai:ChatOpenAI` and set `use_responses_api: true` with `output_version: responses/v1`.
 

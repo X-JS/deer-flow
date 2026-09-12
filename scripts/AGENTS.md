@@ -23,6 +23,27 @@ Corepack, checking `corepack.cmd` before `corepack`. POSIX Python (including
 MSYS/Cygwin Python) keeps the generic name first for each tool; the gate is
 based on Python's `os.name`, not the invoking shell.
 
+## Setup Wizard Provider Registry
+
+`scripts/wizard/providers.py` owns the provider menus for `make setup`:
+`LLM_PROVIDERS`, `SEARCH_PROVIDERS`, and `WEB_FETCH_PROVIDERS`. Each
+`LLMProvider` becomes one `models[0]` entry through
+`scripts/wizard/writer.py::build_minimal_config`. A `base_url` inside
+`extra_config` is hoisted to the top-level `base_url` field; every other key
+(including `default_headers`) is merged onto the model entry, so a new provider
+generally needs no writer change. Use the endpoint's **bare API model ids** —
+aggregator-style prefixes such as opencode's `opencode-go/<id>` belong to the
+aggregator's own client config and are rejected by the raw endpoint. Add or
+adjust a provider with a matching test in
+`backend/tests/test_setup_wizard.py`.
+
+Providers whose endpoint needs a per-request header use a dedicated model class
+instead of a bare `langchain_openai:ChatOpenAI`. The `opencode_go` provider
+points at `deerflow.models.opencode_provider:OpenCodeChatModel`, which injects
+`x-opencode-session: deer-flow:<thread_id>` into the request payload
+(`extra_headers`) per call and falls back to the static `default_headers` value
+outside a LangGraph run. Keep such a profile's `use` in sync with its test.
+
 ## Public Skill Review Waivers
 
 `review_changed_public_skills.py` keeps the analyzer strict and applies narrow

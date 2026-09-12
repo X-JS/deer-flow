@@ -44,6 +44,7 @@ class TestProviders:
             "minimax",
             "minimax_cn",
             "openrouter",
+            "opencode_go",
             "vllm",
             "mindie",
             "codex",
@@ -115,6 +116,51 @@ class TestProviders:
         providers = {provider.name: provider for provider in LLM_PROVIDERS}
         openai = providers["openai"]
         assert openai.extra_config_for("gpt-5") == openai.extra_config
+
+    def test_opencode_go_uses_bare_api_model_ids(self):
+        """OpenCode Go accepts bare API ids; ``opencode-go/<id>`` is opencode's
+        own config format and is rejected by the Zen Go endpoint (401)."""
+        provider = next(p for p in LLM_PROVIDERS if p.name == "opencode_go")
+
+        assert provider.env_var == "OPENCODE_API_KEY"
+        assert provider.use == "deerflow.models.opencode_provider:OpenCodeChatModel"
+        assert provider.default_model == "deepseek-v4-flash"
+        assert provider.default_model in provider.models
+        for model in provider.models:
+            assert not model.startswith("opencode-go/")
+
+    def test_opencode_go_excludes_anthropic_messages_models(self):
+        """Models served on the Anthropic /messages endpoint cannot be reached
+        through langchain_openai:ChatOpenAI, so they must not be listed."""
+        provider = next(p for p in LLM_PROVIDERS if p.name == "opencode_go")
+
+        assert "minimax-m3" not in provider.models
+        assert "qwen3.8-max" not in provider.models
+
+    def test_opencode_go_sends_required_session_header(self):
+        provider = next(p for p in LLM_PROVIDERS if p.name == "opencode_go")
+        headers = provider.extra_config["default_headers"]
+
+        assert provider.extra_config["base_url"] == "https://opencode.ai/zen/go/v1"
+        assert headers["x-opencode-session"]
+        assert headers["User-Agent"].startswith("deer-flow")
+
+    def test_opencode_go_defaults_are_preserved_in_generated_config(self):
+        provider = next(p for p in LLM_PROVIDERS if p.name == "opencode_go")
+        content = build_minimal_config(
+            provider_use=provider.use,
+            model_name=provider.default_model,
+            display_name=provider.display_name,
+            api_key_field=provider.api_key_field,
+            env_var=provider.env_var,
+            extra_model_config=provider.extra_config,
+        )
+        model = yaml.safe_load(content)["models"][0]
+
+        assert model["model"] == "deepseek-v4-flash"
+        assert model["base_url"] == "https://opencode.ai/zen/go/v1"
+        assert model["api_key"] == "$OPENCODE_API_KEY"
+        assert model["default_headers"]["x-opencode-session"]
 
     def test_llm_providers_have_required_fields(self):
         for p in LLM_PROVIDERS:
