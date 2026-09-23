@@ -115,26 +115,65 @@ Get-Content logs\frontend.log -Tail 50 -Wait
 
 > 注意：`frontend` 容器把输出重定向到 `/app/logs/frontend.log`（挂载到宿主机 `logs/frontend.log`），因此 `docker logs deer-flow-frontend` 通常为空。
 
-### 3.4 更新容器
+### 3.4 更新代码后：升级 / 重启容器（核心操作）
 
-| 改动类型 | 处理方式 |
-| --- | --- |
-| 只改 `config.yaml`（模型/工具） | `docker restart deer-flow-gateway`（`models[*]` 本就会热重载） |
-| 改 `.env`（新增变量） | **必须重建容器**（env_file 只在创建时注入） |
-| 改 `backend/` 运行时代码 | `docker restart deer-flow-gateway`（`backend/` 是挂载的，dev 还有热重载） |
-| 改 `frontend/src` | HMR 自动生效，刷新浏览器即可 |
-| 改依赖（pyproject/uv.lock）或 Dockerfile | 需 `--build` 重建镜像（见 3.6） |
+改完代码，先判断“**要不要重建镜像**”，再决定用轻量 `restart`、`--force-recreate`（重建容器）还是 `--build`（重建镜像）。dev compose 里 `backend/` 与 `frontend/src` 是**挂载**的（见 3.1），所以大多数改动不需要动镜像。
+
+| 改动类型 | 重建镜像? | 处理方式 |
+| --- | --- | --- |
+| `config.yaml`（模型/工具） | 否 | `docker restart deer-flow-gateway`（dev 网关还监听 `*.yaml`，也会自动重载） |
+| `.env`（新增/改变量） | 否，但**需重建容器** | `--force-recreate --no-build gateway`（`env_file` 只在容器创建时注入） |
+| `backend/` 运行时代码 | 否 | 一般无需操作（uvicorn `--reload` 热重载）；不稳时 `docker restart deer-flow-gateway` 兜底 |
+| `frontend/src` | 否 | HMR 自动生效，刷新浏览器即可 |
+| 依赖（`pyproject.toml`/`uv.lock`/`package.json`）或 Dockerfile | **是** | `up -d --build <服务>`（见 3.6） |
+| 改 compose 文件 / 挂载卷 | 否 | `--force-recreate --no-build <服务>` |
+
+最常用的三条（按“改动从小到大”）：
 
 ```powershell
-# 轻量：重启
+cd E:\opensource\deer-flow
+
+# ① 只改后端代码 / config.yaml → 重启网关（最轻量）
 docker restart deer-flow-gateway
 
-# 重建 gateway + nginx（复用镜像，不 build）
+# ② 改了 .env 或挂载 → 重建 gateway + nginx（复用镜像，不 build）
 $env:DEER_FLOW_ROOT=(Get-Location).Path
 docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --force-recreate --no-build gateway nginx
+
+# ③ 改了依赖或 Dockerfile → 重新构建镜像
+$env:DEER_FLOW_ROOT=(Get-Location).Path
+docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --build gateway frontend
 ```
 
-> 重建 gateway 时建议**把 nginx 一起重建**：nginx 启动时解析 `gateway` 的 IP，只重建 gateway 会让 nginx 缓存旧 IP 导致 502。
+> 重建 `gateway` 时建议**把 nginx 一起重建**：nginx 启动时解析 `gateway` 的 IP，只重建 gateway 会让 nginx 缓存旧 IP 导致 502。
+>
+> 只改 `config.yaml` / `skills/`（已挂载）或前端源码，**不需要**任何重建镜像的操作。
+
+#### 能只“重启全部容器”吗？
+
+`docker restart` 只重启**现有**容器（环境变量、镜像都不变）。得益于 dev compose 的挂载和启动脚本，它能覆盖多数日常改动，但**不是全部**：
+
+| 改动类型 | 只 `docker restart` 够吗 | 原因 |
+| --- | --- | --- |
+| `backend/` 代码 | ✅ | 已挂载 + uvicorn `--reload`，其实不重启也生效 |
+| `frontend/src` | ✅ | 已挂载 + HMR，不重启也生效 |
+| `config.yaml` | ✅ | 已挂载，且 `--reload-include='*.yaml'` |
+| `uv.lock` / 后端依赖 | ✅（多数） | 重启时 `dev-entrypoint.sh` 会重跑 `uv sync --locked` |
+| `.env` 新增 / 改值 | ❌ | `env_file` 只在**创建容器**时注入，restart 沿用旧环境 |
+| 新增 `UV_EXTRAS` | ❌ | 同上，需重建容器 |
+| 只改 `pyproject.toml` 未更新 lock | ⚠️ | `uv sync --locked` 会直接失败；先在宿主机 `make install` 刷 lock |
+| `frontend/package.json` 依赖 | ❌ | 该文件未挂载，`node_modules` 在镜像里，需 `--build` |
+| Dockerfile / 基础镜像 | ❌ | 必须 `--build` |
+
+重启全部容器：
+
+```powershell
+cd E:\opensource\deer-flow
+$env:DEER_FLOW_ROOT=(Get-Location).Path
+docker compose -p deer-flow -f docker/docker-compose-dev.yaml restart
+```
+
+> 结论：**日常改后端 / 前端 / 配置，重启（甚至不重启）就够；一旦动了 `.env`、前端依赖或 Dockerfile，就得 `--force-recreate` 或 `--build`。**
 
 ### 3.5 停止 / 清理
 
@@ -170,6 +209,31 @@ docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --build redi
 
 `scripts/docker.sh start` 会：读 `config.yaml` 判断沙箱模式自动决定是否启 `provisioner`、创建缺失的 `.env`、`export DEER_FLOW_ROOT`，然后 `up --build -d`。
 它用 `-p deer-flow-dev` 且强制 `--build`，在加速器失效时会失败；此时用 3.2 的命令。
+
+### 3.8 生产镜像模式（`make up` / `make down`）
+
+如果你用的是**生产 compose**（`docker/docker-compose.yaml`，镜像不带 dev 挂载，代码是**打进镜像**的），更新代码后**必须重新构建镜像**——`make up` 的默认行为就是 build + start：
+
+```bash
+# 在 Git Bash 中执行
+make up            # = scripts/deploy.sh：docker compose up --build -d --wait（构建 + 启动 + 等就绪）
+make down          # 停止并删除容器
+make docker-logs   # 跟踪日志
+```
+
+只构建镜像、不启动：
+
+```bash
+./scripts/deploy.sh build     # 只 build 全部镜像
+./scripts/deploy.sh start     # 用已构建镜像启动（不 build）
+```
+
+| 模式 | compose 文件 | 代码位置 | 更新代码后 |
+| --- | --- | --- | --- |
+| **开发**（3.2–3.6） | `docker-compose-dev.yaml` | `backend/`、`frontend/src` 挂载热重载 | `restart` / `--force-recreate`，多数不用 build |
+| **生产**（本节） | `docker-compose.yaml` | 打进镜像 | 必须 `make up`（或 `./scripts/deploy.sh build`）重建 |
+
+> 生产模式的挂载只有 `skills/` 和 `config.yaml` 等运行时文件；`backend/`/`frontend/` 源码改动不会生效，**必须重建**。
 
 ---
 
@@ -387,9 +451,15 @@ docker ps --format '{{.Names}} | {{.Status}}'
 docker compose -p deer-flow -f docker/docker-compose-dev.yaml logs -f gateway
 Get-Content logs\frontend.log -Tail 50 -Wait
 
-# ── 更新 ──
-docker restart deer-flow-gateway
-docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --force-recreate --no-build gateway nginx
+# ── 更新（改代码后升级重启）──
+docker compose -p deer-flow -f docker/docker-compose-dev.yaml restart   # 重启全部（日常改动够用）
+docker restart deer-flow-gateway                     # 只改后端/配置：最轻量
+docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --force-recreate --no-build gateway nginx   # 改了 .env/挂载
+docker compose -p deer-flow -f docker/docker-compose-dev.yaml up -d --build gateway frontend                    # 改了依赖/Dockerfile
+
+# ── 生产镜像模式（Git Bash，代码打进镜像，必须重建）──
+make up        # build + start
+make down
 
 # ── 停止 / 清理 ──
 docker compose -p deer-flow -f docker/docker-compose-dev.yaml down
